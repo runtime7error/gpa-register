@@ -1,0 +1,48 @@
+# Docker
+# Build a Docker image
+# https://docs.microsoft.com/azure/devops/pipelines/languages/docker
+
+trigger:
+  - develop
+
+resources:
+  - repo: self
+
+variables:
+  imageName: 'test'
+  version: '0.0.0'
+
+stages:
+  - stage: Build
+    displayName: Build and push Docker image
+    jobs:
+      - job: Build
+        displayName: Build
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: '20.x'
+            displayName: 'Install Node.js'
+
+          - script: |
+              npm install
+            displayName: 'Install dependencies'
+
+          - script: |
+              npx semantic-release
+            displayName: 'Run Semantic Release'
+
+          - script: |
+              echo "##vso[task.setvariable variable=version]$(cat VERSION)"
+            displayName: 'Set the new version'
+
+          - task: Docker@2
+            displayName: Build and push
+            inputs:
+              containerRegistry: DockerhubService
+              repository: 'danvoidll/$(imageName)'
+              dockerfile: '$(Build.SourcesDirectory)/Dockerfile'
+              command: 'buildAndPush'
+              tags: $(version)
