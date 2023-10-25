@@ -128,10 +128,19 @@ import { onMounted, ref } from 'vue'
 import { Student } from '../models/Student'
 import { useToast } from 'primevue/usetoast'
 import { useRouter } from 'vue-router'
+import { initializeApp } from 'firebase/app'
+import {
+  getDatabase,
+  remove,
+  query as fireQuery,
+  ref as fireRef,
+  push as firePush,
+  onValue
+} from 'firebase/database'
 
 const router = useRouter()
 const toast = useToast()
-const students = ref()
+const students = ref([])
 const student = ref({})
 const selectedStudents = ref()
 const deleteStudentsDialog = ref(false)
@@ -139,14 +148,33 @@ const submitted = ref(false)
 const studentDialog = ref(false)
 const userData = ref(null)
 const isAdmin = ref(false)
-const admins = ['Morgl', 'Pietro Pacanaro', 'Vinícius Henrique'];
+const admins = ['Morgl', 'Pietro Pacanaro', 'Vinícius Henrique']
+const firebaseConfig = {
+  apiKey: 'AIzaSyCt2YkpLfvAIZ3z8cxSVBCwvs5zhB4sTZY',
+  authDomain: 'stable-apogee-402617.firebaseapp.com',
+  projectId: 'stable-apogee-402617',
+  storageBucket: 'stable-apogee-402617.appspot.com',
+  messagingSenderId: '252001894697',
+  appId: '1:252001894697:web:80910045faeebdd66e7738',
+  measurementId: 'G-JPGB8L3PDF'
+}
+
+const firebaseApp = initializeApp(firebaseConfig)
+const db = getDatabase(firebaseApp)
 
 const confirmDeleteSelected = () => {
   deleteStudentsDialog.value = true
 }
 
-const deleteSelectedStudents = () => {
+const deleteSelectedStudents = async () => {
   students.value = students.value.filter((val) => !selectedStudents.value.includes(val))
+
+  selectedStudents.value.forEach((student) => {
+    const query = fireQuery(fireRef(db, 'student-' + student.name))
+
+    remove(query)
+  })
+
   deleteStudentsDialog.value = false
   selectedStudents.value = null
   toast.add({ severity: 'success', summary: 'Successful', detail: 'Students Deleted', life: 3000 })
@@ -162,6 +190,13 @@ const saveStudent = () => {
   submitted.value = true
 
   if (!student.value.name) return
+
+  const newPostRef = fireRef(db, 'student-' + student.value.name)
+
+  firePush(newPostRef, {
+    name: student.value.name,
+    grade: student.value.note
+  })
 
   students.value.push(new Student(student.value.name, student.value.note))
   toast.add({
@@ -188,10 +223,26 @@ onMounted(() => {
   const userDataString = router.currentRoute._value.params.id
   const data = JSON.parse(userDataString)
   userData.value = data
+  const itemsRef = fireRef(db, '/')
 
   if (admins.includes(data.given_name)) {
-    isAdmin.value = true;
+    isAdmin.value = true
   }
+
+  onValue(itemsRef, (snapshot) => {
+    const data = snapshot.val()
+    if (data) {
+      const itemList = []
+      for (let key in data) {
+        for (let student in data[key]) {
+          itemList.push({ name: data[key][student].name, note: data[key][student].grade })
+        }
+      }
+      students.value = itemList
+    } else {
+      students.value = []
+    }
+  })
 })
 </script>
 
